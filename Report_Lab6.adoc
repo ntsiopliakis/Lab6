@@ -1,0 +1,112 @@
+:imagesdir: Images
+:figure-caption: Рисунок
+
+== Лабораторная работа №6
+==== Отрывок из файла *main.c*
+
+Новогодняя елочка: с периодом 50 мс светодиоды поочередно загораются. после того, как все четыре светодиода зажглись, они поочередно гаснут в обратном порядке. Управление режимом работы светодиодов происходит в обработчике прерываний таймера 5  *MyXmasTim5InterruptHandler()*. При нажатии на кнопку, период прерывания увеличивается на 50 мс. Начиная с момента, когда период становится равным 1000 мс, при каждом нажатии кнопки период уменьшается на 50 мс. Начиная с момента, когда период становится равным 50 мс, нажатия кнопки снова приводят к увеличению периода на 50 мс, и так далее.
+
+[source, cpp]
+----
+  using PortC = Port<GPIOC>;
+  using PortA = Port<GPIOA>;
+  using LED1pin = Pin<PortA, 5>;
+  using LED2pin = Pin<PortC, 9>;
+  using LED3pin = Pin<PortC, 8>;
+  using LED4pin = Pin<PortC, 5>;
+  using UserLeds = Leds<LED1pin, LED2pin, LED3pin, LED4pin>;
+  using UserButton = Button< Pin< PortC, 13> >;
+
+
+void MyXmasTim5InterruptHandler()
+{
+  static uint8_t counterLedNum=1;
+  if(TIM5::SR::UIF::UpdatePending::IsSet()&&TIM5::DIER::UIE::Enable::IsSet())
+  {
+    TIM5::SR::UIF::NoUpdate::Set();
+    switch(counterLedNum)
+    {
+    case 1:
+      LED1pin::Toggle();
+      break;
+    case 2:
+      LED2pin::Toggle();
+      break;
+    case 3:
+      LED3pin::Toggle();
+      break;
+    case 4:
+      LED4pin::Toggle();
+      break;
+    case 5:
+      LED4pin::Toggle();
+      break;
+    case 6:
+      LED3pin::Toggle();
+      break;
+    case 7:
+      LED2pin::Toggle();
+      break;
+    case 8:
+      LED1pin::Toggle();
+      break;
+    }
+    counterLedNum=(counterLedNum<8)?(counterLedNum+1):1;
+  }
+}
+
+extern "C"
+{
+int __low_level_init(void)
+{
+  RCC::APB1ENR::TIM5EN::Enable::Set();
+  TIM5::PSC::Write(16'000U-1U);
+  NVIC::ISER1::Write(1<<18U);
+  TIM5::DIER::UIE::Enable::Set();
+  TIM5::ARR::Write(50U-1U);
+  TIM5::CNT::Write(0U);
+  return 1;
+}
+}
+
+
+int main()
+{
+  static bool periodDirection =1;
+  static uint16_t period = 50ms;
+
+  PortC::Enable();
+  PortA::Enable();
+  UserLeds::Enable();
+  UserButton::Enable();
+  TIM5::CR1::CEN::Enable::Set();
+  for(;;)
+  {
+    if(UserButton::WasPressed())
+    {
+      if(period==1000ms)
+      {
+        periodDirection=0;
+      }
+      if(period==50ms)
+      {
+        periodDirection=1;
+      }
+
+      if(periodDirection)
+      {
+        period+=50ms;
+      }
+      else
+      {
+        period-=50ms;
+      }
+
+      TIM5::ARR::Write(period-1U);
+      TIM5::CNT::Write(0U);
+    }
+  }
+  return 0 ;
+}
+----
+
